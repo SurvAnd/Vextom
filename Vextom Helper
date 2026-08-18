@@ -1,0 +1,981 @@
+task.wait(1)
+
+local pcall = pcall
+local ipairs = ipairs
+local pairs = pairs
+local string_find = string.find
+local string_lower = string.lower
+local Vector3_new = Vector3.new
+local UDim2_new = UDim2.new
+local UDim2_fromOffset = UDim2.fromOffset
+local Color3_fromRGB = Color3.fromRGB
+local Instance_new = Instance.new
+local tick = tick
+local getnet = getconnections or function() return {} end
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+
+local ConfigFolder = "VextomHelper"
+local ConfigFile = ConfigFolder .. "/Config.json"
+
+local ConfigData = {
+   RemoveControl = false,
+   RemoveDraco = false,
+   WaterWalk = false,
+   LavaWalk = false,
+   FastMode = false,
+   NoShake = false,
+   NoMusic = false,
+   AutoHaki = false,
+   UseSkillEnabled = false,
+   SelectedWeapon = "Melee",
+   SelectedSkill = "Z",
+   SkillHoldTime = 0,
+   SkillUseDelay = 50,
+   HitBoxEnabled = false,
+   SuperJumpEnabled = false,
+   ZBugEnabled = false
+}
+
+local saveScheduled = false
+local function SaveConfig()
+   if saveScheduled then return end
+   saveScheduled = true
+   task.delay(1, function()
+      saveScheduled = false
+      pcall(function()
+         if makefolder and not isfolder(ConfigFolder) then
+            makefolder(ConfigFolder)
+         end
+         if writefile then
+            writefile(ConfigFile, HttpService:JSONEncode(ConfigData))
+         end
+      end)
+   end)
+end
+
+local function LoadConfig()
+   pcall(function()
+      if isfile and readfile and isfile(ConfigFile) then
+         local decoded = HttpService:JSONDecode(readfile(ConfigFile))
+         for k, v in pairs(decoded) do
+            if ConfigData[k] ~= nil then
+               ConfigData[k] = v
+            end
+         end
+      end
+   end)
+end
+
+LoadConfig()
+
+local RemoveControl = ConfigData.RemoveControl
+local RemoveDraco = ConfigData.RemoveDraco
+local WaterWalkState = ConfigData.WaterWalk
+local LavaWalkState = ConfigData.LavaWalk
+local FastMode = ConfigData.FastMode
+local NoShake = ConfigData.NoShake
+local NoMusic = ConfigData.NoMusic
+local AutoHaki = ConfigData.AutoHaki
+local UseSkillEnabled = ConfigData.UseSkillEnabled
+local SelectedWeapon = ConfigData.SelectedWeapon
+local SelectedSkill = ConfigData.SelectedSkill
+local SkillHoldTime = ConfigData.SkillHoldTime
+local SkillUseDelay = ConfigData.SkillUseDelay
+local HitBoxEnabled = ConfigData.HitBoxEnabled
+local SuperJumpEnabled = ConfigData.SuperJumpEnabled
+local SuperJumpKey = Enum.KeyCode.N
+local ZBugEnabled = ConfigData.ZBugEnabled
+local ZBugKey = Enum.KeyCode.B
+
+local lavaPart = nil
+
+local function ApplyLavaWalk(enable)
+   pcall(function()
+      if enable then
+         if not lavaPart or not lavaPart.Parent then
+            lavaPart = Instance_new("Part")
+            lavaPart.Name = "LavaWalkPart"
+            lavaPart.Size = Vector3_new(200, 30, 400)
+            lavaPart.Position = Vector3_new(-5215, 154, -5600)
+            lavaPart.Anchored = true
+            lavaPart.Color = Color3_fromRGB(255, 140, 0)
+            lavaPart.Parent = workspace
+         end
+      else
+         if lavaPart then
+            lavaPart:Destroy()
+            lavaPart = nil
+         end
+      end
+   end)
+end
+
+local function ElevateThread()
+   if setthreadidentity then
+      pcall(setthreadidentity, 7)
+   elseif setidentity then
+      pcall(setidentity, 7)
+   elseif syn and syn.set_thread_identity then
+      pcall(syn.set_thread_identity, 7)
+   end
+end
+
+local function EquipWeapon(weaponType)
+   local char = LocalPlayer.Character
+   if not char then return nil, false end
+   local humanoid = char:FindFirstChildOfClass("Humanoid")
+   if not humanoid then return nil, false end
+
+   local equipped = char:FindFirstChildOfClass("Tool")
+   if equipped then
+      local tooltip = equipped.ToolTip
+      if (weaponType == "Melee" and tooltip == "Melee") or
+         (weaponType == "Blox Fruits" and (tooltip == "Blox Fruit" or string_find(equipped.Name, "Fruit"))) or
+         (weaponType == "Sword" and tooltip == "Sword") or
+         (weaponType == "Gun" and tooltip == "Gun") then
+         return equipped, false
+      end
+   end
+
+   local backpack = LocalPlayer:FindFirstChild("Backpack")
+   if backpack then
+      for _, tool in ipairs(backpack:GetChildren()) do
+         if tool:IsA("Tool") then
+            local tooltip = tool.ToolTip
+            if (weaponType == "Melee" and tooltip == "Melee") or
+               (weaponType == "Blox Fruits" and (tooltip == "Blox Fruit" or string_find(tool.Name, "Fruit"))) or
+               (weaponType == "Sword" and tooltip == "Sword") or
+               (weaponType == "Gun" and tooltip == "Gun") then
+               humanoid:EquipTool(tool)
+               return tool, true
+            end
+         end
+      end
+   end
+   return char:FindFirstChildOfClass("Tool"), false
+end
+
+local function GetSpecialTool(keyword)
+   local char = LocalPlayer.Character
+   if not char then return nil end
+
+   local equipped = char:FindFirstChildOfClass("Tool")
+   if equipped and equipped.ToolTip == "Melee" and string_find(string_lower(equipped.Name), keyword) then
+      return equipped
+   end
+
+   local backpack = LocalPlayer:FindFirstChild("Backpack")
+   if backpack then
+      for _, tool in ipairs(backpack:GetChildren()) do
+         if tool:IsA("Tool") and tool.ToolTip == "Melee" and string_find(string_lower(tool.Name), keyword) then
+            return tool
+         end
+      end
+   end
+   return nil
+end
+
+local function CastSkill(skillKey, holdDuration)
+   ElevateThread()
+   local keyStr = tostring(skillKey):upper()
+   local keyEnum = Enum.KeyCode[keyStr]
+   if keyEnum then
+      VirtualInputManager:SendKeyEvent(true, keyEnum, false, game)
+      if holdDuration and holdDuration > 0 then
+         task.wait(holdDuration)
+      else
+         task.wait(0.01)
+      end
+      VirtualInputManager:SendKeyEvent(false, keyEnum, false, game)
+   end
+end
+
+local function ApplyFastNoShake(enable)
+   pcall(function()
+      local util = ReplicatedStorage:FindFirstChild("Util")
+      if not util then return end
+
+      local targets = {
+         util:FindFirstChild("CameraShake"),
+         util:FindFirstChild("CameraShaker")
+      }
+
+      for _, moduleObj in ipairs(targets) do
+         if moduleObj then
+            local mainModule = moduleObj:IsA("ModuleScript") and moduleObj or moduleObj:FindFirstChild("Main") or moduleObj:FindFirstChild("CameraShake")
+            if mainModule and mainModule:IsA("ModuleScript") then
+               local loaded = require(mainModule)
+               if type(loaded) == "table" then
+                  if enable then
+                     loaded.ShakeOnce = function() end
+                     loaded.Shake = function() end
+                     loaded.Start = function() end
+                     loaded.ShakeSustained = function() end
+                     if loaded.Frequency then loaded.Frequency = -1 end
+                     if loaded.Scale then loaded.Scale = -1 end
+                  end
+               end
+            end
+         end
+      end
+   end)
+
+   pcall(function()
+      local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+      local changeSetting = remotes and remotes:FindFirstChild("ChangeSetting")
+      if changeSetting then
+         changeSetting:FireServer("CameraShake", not enable)
+      end
+   end)
+end
+
+local function ApplyNoMusic(enable)
+   pcall(function()
+      local global = require(ReplicatedStorage.Global)
+      if global.updateMusic2 then
+         global.updateMusic2(enable)
+      end
+   end)
+
+   pcall(function()
+      local events = ReplicatedStorage:FindFirstChild("Events")
+      if events and events:FindFirstChild("ToggleMusic") then
+         events.ToggleMusic:Fire(enable)
+      end
+   end)
+
+   pcall(function()
+      local worldOrigin = workspace:FindFirstChild("_WorldOrigin")
+      if worldOrigin and worldOrigin:FindFirstChild("Sounds") then
+         local locations = worldOrigin.Sounds:FindFirstChild("Locations")
+         if locations then
+            for _, sound in ipairs(locations:GetChildren()) do
+               if sound:IsA("Sound") then
+                  if enable then
+                     sound:Pause()
+                  else
+                     sound:Resume()
+                  end
+               end
+            end
+         end
+      end
+   end)
+end
+
+local rawmetatable = getrawmetatable or function() return nil end
+if rawmetatable and setreadonly then
+   local mt = rawmetatable(game)
+   local oldNamecall = mt.__namecall
+   setreadonly(mt, false)
+   mt.__namecall = newcclosure(function(self, ...)
+      local method = getnamecallmethod()
+      local args = {...}
+      if method == "FireServer" and self.Name == "CommE" and args[1] == "Soru" then
+         if UseSkillEnabled then
+            task.spawn(function()
+               ElevateThread()
+               local tool, justEquipped = EquipWeapon(SelectedWeapon)
+               if justEquipped or tool then
+                  task.wait(0.05)
+               end
+               task.wait(SkillUseDelay / 1000)
+               CastSkill(SelectedSkill, SkillHoldTime)
+            end)
+         end
+      end
+      return oldNamecall(self, ...)
+   end)
+   setreadonly(mt, true)
+end
+
+if CoreGui:FindFirstChild("VextomHelperUI") then
+   CoreGui.VextomHelperUI:Destroy()
+end
+
+local ScreenGui = Instance_new("ScreenGui")
+ScreenGui.Name = "VextomHelperUI"
+ScreenGui.ResetOnSpawn = false
+pcall(function()
+   ScreenGui.Parent = CoreGui
+end)
+if not ScreenGui.Parent then
+   ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+local MainFrame = Instance_new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2_fromOffset(680, 460)
+MainFrame.Position = UDim2_new(0.5, -340, 0.5, -230)
+MainFrame.BackgroundColor3 = Color3_fromRGB(18, 18, 18)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = false
+MainFrame.Parent = ScreenGui
+
+local MainUICorner = Instance_new("UICorner")
+MainUICorner.CornerRadius = UDim.new(0, 8)
+MainUICorner.Parent = MainFrame
+
+local TopBar = Instance_new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2_new(1, 0, 0, 38)
+TopBar.BackgroundTransparency = 1
+TopBar.Parent = MainFrame
+
+local TitleLabel = Instance_new("TextLabel")
+TitleLabel.Name = "TitleLabel"
+TitleLabel.Size = UDim2_new(1, -90, 1, 0)
+TitleLabel.Position = UDim2_new(0, 15, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Vextom Helper"
+TitleLabel.TextColor3 = Color3_fromRGB(255, 255, 255)
+TitleLabel.TextSize = 16
+TitleLabel.Font = Enum.Font.SourceSansBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
+
+local GlobeBtn = Instance_new("ImageButton")
+GlobeBtn.Name = "GlobeBtn"
+GlobeBtn.Size = UDim2_fromOffset(26, 26)
+GlobeBtn.Position = UDim2_new(1, -64, 0, 6)
+GlobeBtn.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
+GlobeBtn.Image = "rbxassetid://6031075931"
+GlobeBtn.ImageColor3 = Color3_fromRGB(255, 255, 255)
+GlobeBtn.AutoButtonColor = false
+GlobeBtn.Parent = TopBar
+
+local GlobeCorner = Instance_new("UICorner")
+GlobeCorner.CornerRadius = UDim.new(1, 0)
+GlobeCorner.Parent = GlobeBtn
+
+local CloseBtn = Instance_new("ImageButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2_fromOffset(26, 26)
+CloseBtn.Position = UDim2_new(1, -32, 0, 6)
+CloseBtn.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
+CloseBtn.Image = "rbxassetid://6031094678"
+CloseBtn.ImageColor3 = Color3_fromRGB(200, 200, 200)
+CloseBtn.AutoButtonColor = false
+CloseBtn.Parent = TopBar
+
+local CloseCorner = Instance_new("UICorner")
+CloseCorner.CornerRadius = UDim.new(1, 0)
+CloseCorner.Parent = CloseBtn
+
+GlobeBtn.MouseButton1Click:Connect(function()
+   pcall(function()
+      if setclipboard then
+         setclipboard("https://www.youtube.com/@demorgan-bloody")
+      end
+   end)
+end)
+
+CloseBtn.MouseButton1Click:Connect(function()
+   MainFrame.Visible = not MainFrame.Visible
+end)
+
+local dragging, dragInput, dragStart, startPos
+TopBar.InputBegan:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+      dragging = true
+      dragStart = input.Position
+      startPos = MainFrame.Position
+      input.Changed:Connect(function()
+         if input.UserInputState == Enum.UserInputState.End then
+            dragging = false
+         end
+      end)
+   end
+end)
+
+TopBar.InputChanged:Connect(function(input)
+   if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+      dragInput = input
+   end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+   if input == dragInput and dragging then
+      local delta = input.Position - dragStart
+      MainFrame.Position = UDim2_new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+   end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+   if not gameProcessed and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == Enum.KeyCode.RightControl then
+      MainFrame.Visible = not MainFrame.Visible
+   end
+end)
+
+local ContentContainer = Instance_new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2_new(1, -20, 1, -46)
+ContentContainer.Position = UDim2_new(0, 10, 0, 38)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = MainFrame
+
+local LeftCard = Instance_new("Frame")
+LeftCard.Name = "LeftCard"
+LeftCard.Size = UDim2_new(0.485, 0, 1, 0)
+LeftCard.Position = UDim2_new(0, 0, 0, 0)
+LeftCard.BackgroundColor3 = Color3_fromRGB(24, 24, 24)
+LeftCard.BorderSizePixel = 0
+LeftCard.Parent = ContentContainer
+
+local LeftCorner = Instance_new("UICorner")
+LeftCorner.CornerRadius = UDim.new(0, 8)
+LeftCorner.Parent = LeftCard
+
+local LeftList = Instance_new("UIListLayout")
+LeftList.SortOrder = Enum.SortOrder.LayoutOrder
+LeftList.Padding = UDim.new(0, 6)
+LeftList.Parent = LeftCard
+
+local LeftPadding = Instance_new("UIPadding")
+LeftPadding.PaddingTop = UDim.new(0, 12)
+LeftPadding.PaddingBottom = UDim.new(0, 12)
+LeftPadding.PaddingLeft = UDim.new(0, 14)
+LeftPadding.PaddingRight = UDim.new(0, 14)
+LeftPadding.Parent = LeftCard
+
+local RightContainer = Instance_new("Frame")
+RightContainer.Name = "RightContainer"
+RightContainer.Size = UDim2_new(0.495, 0, 1, 0)
+RightContainer.Position = UDim2_new(0.505, 0, 0, 0)
+RightContainer.BackgroundTransparency = 1
+RightContainer.Parent = ContentContainer
+
+local SoruCard = Instance_new("Frame")
+SoruCard.Name = "SoruCard"
+SoruCard.Size = UDim2_new(1, 0, 0, 238)
+SoruCard.Position = UDim2_new(0, 0, 0, 0)
+SoruCard.BackgroundColor3 = Color3_fromRGB(24, 24, 24)
+SoruCard.BorderSizePixel = 0
+SoruCard.Parent = RightContainer
+
+local SoruCorner = Instance_new("UICorner")
+SoruCorner.CornerRadius = UDim.new(0, 8)
+SoruCorner.Parent = SoruCard
+
+local SoruList = Instance_new("UIListLayout")
+SoruList.SortOrder = Enum.SortOrder.LayoutOrder
+SoruList.Padding = UDim.new(0, 6)
+SoruList.Parent = SoruCard
+
+local SoruPadding = Instance_new("UIPadding")
+SoruPadding.PaddingTop = UDim.new(0, 12)
+SoruPadding.PaddingBottom = UDim.new(0, 12)
+SoruPadding.PaddingLeft = UDim.new(0, 14)
+SoruPadding.PaddingRight = UDim.new(0, 14)
+SoruPadding.Parent = SoruCard
+
+local BugsCard = Instance_new("Frame")
+BugsCard.Name = "BugsCard"
+BugsCard.Size = UDim2_new(1, 0, 0, 164)
+BugsCard.Position = UDim2_new(0, 0, 0, 250)
+BugsCard.BackgroundColor3 = Color3_fromRGB(24, 24, 24)
+BugsCard.BorderSizePixel = 0
+BugsCard.Parent = RightContainer
+
+local BugsCorner = Instance_new("UICorner")
+BugsCorner.CornerRadius = UDim.new(0, 8)
+BugsCorner.Parent = BugsCard
+
+local BugsList = Instance_new("UIListLayout")
+BugsList.SortOrder = Enum.SortOrder.LayoutOrder
+BugsList.Padding = UDim.new(0, 6)
+BugsList.Parent = BugsCard
+
+local BugsPadding = Instance_new("UIPadding")
+BugsPadding.PaddingTop = UDim.new(0, 12)
+BugsPadding.PaddingBottom = UDim.new(0, 12)
+BugsPadding.PaddingLeft = UDim.new(0, 14)
+BugsPadding.PaddingRight = UDim.new(0, 14)
+BugsPadding.Parent = BugsCard
+
+local function CreateToggle(parent, labelText, defaultState, callback)
+   local Frame = Instance_new("Frame")
+   Frame.Size = UDim2_new(1, 0, 0, 36)
+   Frame.BackgroundTransparency = 1
+   Frame.Parent = parent
+
+   local Label = Instance_new("TextLabel")
+   Label.Size = UDim2_new(1, -50, 1, 0)
+   Label.BackgroundTransparency = 1
+   Label.Text = labelText
+   Label.TextColor3 = Color3_fromRGB(180, 180, 180)
+   Label.TextSize = 14
+   Label.Font = Enum.Font.SourceSans
+   Label.TextXAlignment = Enum.TextXAlignment.Left
+   Label.Parent = Frame
+
+   local ToggleBtn = Instance_new("TextButton")
+   ToggleBtn.Size = UDim2_fromOffset(42, 22)
+   ToggleBtn.Position = UDim2_new(1, -42, 0.5, -11)
+   ToggleBtn.BackgroundColor3 = defaultState and Color3_fromRGB(70, 70, 70) or Color3_fromRGB(38, 38, 38)
+   ToggleBtn.Text = ""
+   ToggleBtn.AutoButtonColor = false
+   ToggleBtn.Parent = Frame
+
+   local ToggleCorner = Instance_new("UICorner")
+   ToggleCorner.CornerRadius = UDim.new(1, 0)
+   ToggleCorner.Parent = ToggleBtn
+
+   local Circle = Instance_new("Frame")
+   Circle.Size = UDim2_fromOffset(18, 18)
+   Circle.Position = defaultState and UDim2_new(1, -20, 0.5, -9) or UDim2_new(0, 2, 0.5, -9)
+   Circle.BackgroundColor3 = Color3_fromRGB(255, 255, 255)
+   Circle.BorderSizePixel = 0
+   Circle.Parent = ToggleBtn
+
+   local CircleCorner = Instance_new("UICorner")
+   CircleCorner.CornerRadius = UDim.new(1, 0)
+   CircleCorner.Parent = Circle
+
+   local state = defaultState
+
+   ToggleBtn.MouseButton1Click:Connect(function()
+      state = not state
+      TweenService:Create(ToggleBtn, TweenInfo.new(0.15), {
+         BackgroundColor3 = state and Color3_fromRGB(70, 70, 70) or Color3_fromRGB(38, 38, 38)
+      }):Play()
+      TweenService:Create(Circle, TweenInfo.new(0.15), {
+         Position = state and UDim2_new(1, -20, 0.5, -9) or UDim2_new(0, 2, 0.5, -9)
+      }):Play()
+      callback(state)
+   end)
+
+   return Frame
+end
+
+local function CreateInput(parent, labelText, defaultValue, callback)
+   local Frame = Instance_new("Frame")
+   Frame.Size = UDim2_new(1, 0, 0, 36)
+   Frame.BackgroundTransparency = 1
+   Frame.Parent = parent
+
+   local Label = Instance_new("TextLabel")
+   Label.Size = UDim2_new(1, -50, 1, 0)
+   Label.BackgroundTransparency = 1
+   Label.Text = labelText
+   Label.TextColor3 = Color3_fromRGB(180, 180, 180)
+   Label.TextSize = 14
+   Label.Font = Enum.Font.SourceSans
+   Label.TextXAlignment = Enum.TextXAlignment.Left
+   Label.Parent = Frame
+
+   local Box = Instance_new("TextBox")
+   Box.Size = UDim2_fromOffset(42, 24)
+   Box.Position = UDim2_new(1, -42, 0.5, -12)
+   Box.BackgroundColor3 = Color3_fromRGB(32, 32, 32)
+   Box.Text = tostring(defaultValue)
+   Box.TextColor3 = Color3_fromRGB(200, 200, 200)
+   Box.TextSize = 14
+   Box.Font = Enum.Font.SourceSans
+   Box.ClearTextOnFocus = false
+   Box.Parent = Frame
+
+   local BoxCorner = Instance_new("UICorner")
+   BoxCorner.CornerRadius = UDim.new(0, 4)
+   BoxCorner.Parent = Box
+
+   Box.FocusLost:Connect(function()
+      callback(Box.Text)
+   end)
+
+   return Frame
+end
+
+local function CreateDropdown(parent, placeholder, options, defaultOption, callback)
+   local Container = Instance_new("Frame")
+   Container.Size = UDim2_new(1, 0, 0, 36)
+   Container.BackgroundTransparency = 1
+   Container.ClipsDescendants = false
+   Container.Parent = parent
+
+   local Button = Instance_new("TextButton")
+   Button.Size = UDim2_new(1, 0, 0, 36)
+   Button.BackgroundColor3 = Color3_fromRGB(32, 32, 32)
+   Button.Text = ""
+   Button.AutoButtonColor = false
+   Button.Parent = Container
+
+   local BtnCorner = Instance_new("UICorner")
+   BtnCorner.CornerRadius = UDim.new(0, 6)
+   BtnCorner.Parent = Button
+
+   local Label = Instance_new("TextLabel")
+   Label.Size = UDim2_new(1, -30, 1, 0)
+   Label.Position = UDim2_new(0, 10, 0, 0)
+   Label.BackgroundTransparency = 1
+   Label.Text = placeholder .. " • " .. defaultOption
+   Label.TextColor3 = Color3_fromRGB(180, 180, 180)
+   Label.TextSize = 14
+   Label.Font = Enum.Font.SourceSans
+   Label.TextXAlignment = Enum.TextXAlignment.Left
+   Label.Parent = Button
+
+   local Icon = Instance_new("ImageLabel")
+   Icon.Size = UDim2_fromOffset(16, 16)
+   Icon.Position = UDim2_new(1, -24, 0.5, -8)
+   Icon.BackgroundTransparency = 1
+   Icon.Image = "rbxassetid://6031097225"
+   Icon.ImageColor3 = Color3_fromRGB(150, 150, 150)
+   Icon.Parent = Button
+
+   local ListFrame = Instance_new("Frame")
+   ListFrame.Size = UDim2_new(1, 0, 0, #options * 26 + 4)
+   ListFrame.Position = UDim2_new(0, 0, 1, 4)
+   ListFrame.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
+   ListFrame.BorderSizePixel = 0
+   ListFrame.Visible = false
+   ListFrame.ZIndex = 10
+   ListFrame.Parent = Container
+
+   local ListCorner = Instance_new("UICorner")
+   ListCorner.CornerRadius = UDim.new(0, 6)
+   ListCorner.Parent = ListFrame
+
+   local ListLayout = Instance_new("UIListLayout")
+   ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+   ListLayout.Padding = UDim.new(0, 2)
+   ListLayout.Parent = ListFrame
+
+   local ListPadding = Instance_new("UIPadding")
+   ListPadding.PaddingTop = UDim.new(0, 2)
+   ListPadding.PaddingBottom = UDim.new(0, 2)
+   ListPadding.Parent = ListFrame
+
+   local open = false
+
+   Button.MouseButton1Click:Connect(function()
+      open = not open
+      ListFrame.Visible = open
+   end)
+
+   for _, opt in ipairs(options) do
+      local OptBtn = Instance_new("TextButton")
+      OptBtn.Size = UDim2_new(1, 0, 0, 24)
+      OptBtn.BackgroundTransparency = 1
+      OptBtn.Text = opt
+      OptBtn.TextColor3 = Color3_fromRGB(200, 200, 200)
+      OptBtn.TextSize = 14
+      OptBtn.Font = Enum.Font.SourceSans
+      OptBtn.ZIndex = 11
+      OptBtn.Parent = ListFrame
+
+      OptBtn.MouseButton1Click:Connect(function()
+         Label.Text = placeholder .. " • " .. opt
+         open = false
+         ListFrame.Visible = false
+         callback(opt)
+      end)
+   end
+
+   return Container
+end
+
+CreateToggle(LeftCard, "Remove Control", RemoveControl, function(Value)
+   RemoveControl = Value
+   ConfigData.RemoveControl = Value
+   SaveConfig()
+end)
+
+CreateToggle(LeftCard, "Remove Draco", RemoveDraco, function(Value)
+   RemoveDraco = Value
+   ConfigData.RemoveDraco = Value
+   SaveConfig()
+end)
+
+CreateToggle(LeftCard, "Water Walk", WaterWalkState, function(Value)
+   WaterWalkState = Value
+   ConfigData.WaterWalk = Value
+   SaveConfig()
+   _G.WalkWater_Part = Value
+   pcall(function()
+      local waterPart = workspace:WaitForChild("Map", 5) and workspace.Map:WaitForChild("WaterBase-Plane", 5)
+      if waterPart then
+         waterPart.Size = Value and Vector3_new(1000, 112, 1000) or Vector3_new(1000, 80, 1000)
+      end
+   end)
+end)
+
+CreateToggle(LeftCard, "Lava Walk", LavaWalkState, function(Value)
+   LavaWalkState = Value
+   ConfigData.LavaWalk = Value
+   SaveConfig()
+   ApplyLavaWalk(Value)
+end)
+
+CreateToggle(LeftCard, "Fast Mode", FastMode, function(Value)
+   FastMode = Value
+   ConfigData.FastMode = Value
+   SaveConfig()
+end)
+
+CreateToggle(LeftCard, "No Shake", NoShake, function(Value)
+   NoShake = Value
+   ConfigData.NoShake = Value
+   SaveConfig()
+   ApplyFastNoShake(Value)
+end)
+
+CreateToggle(LeftCard, "No Music", NoMusic, function(Value)
+   NoMusic = Value
+   ConfigData.NoMusic = Value
+   SaveConfig()
+   ApplyNoMusic(Value)
+end)
+
+CreateToggle(LeftCard, "Haki", AutoHaki, function(Value)
+   AutoHaki = Value
+   ConfigData.AutoHaki = Value
+   SaveConfig()
+end)
+
+CreateToggle(SoruCard, "Soru Skill", UseSkillEnabled, function(Value)
+   UseSkillEnabled = Value
+   ConfigData.UseSkillEnabled = Value
+   SaveConfig()
+end)
+
+CreateInput(SoruCard, "Time Hold", SkillHoldTime, function(Text)
+   local num = tonumber(Text)
+   SkillHoldTime = num and math.clamp(num, 0, 5) or 0
+   ConfigData.SkillHoldTime = SkillHoldTime
+   SaveConfig()
+end)
+
+CreateInput(SoruCard, "Time Use", SkillUseDelay, function(Text)
+   local num = tonumber(Text)
+   SkillUseDelay = num and math.clamp(num, 0, 100) or 50
+   ConfigData.SkillUseDelay = SkillUseDelay
+   SaveConfig()
+end)
+
+CreateDropdown(SoruCard, "Weapon", {"Melee", "Blox Fruits", "Sword", "Gun"}, SelectedWeapon, function(Option)
+   SelectedWeapon = Option
+   ConfigData.SelectedWeapon = SelectedWeapon
+   SaveConfig()
+end)
+
+CreateDropdown(SoruCard, "Skill", {"Z", "X", "C", "V", "F"}, SelectedSkill, function(Option)
+   SelectedSkill = Option
+   ConfigData.SelectedSkill = SelectedSkill
+   SaveConfig()
+end)
+
+CreateToggle(BugsCard, "Z Bug [B]", ZBugEnabled, function(Value)
+   ZBugEnabled = Value
+   ConfigData.ZBugEnabled = Value
+   SaveConfig()
+end)
+
+CreateToggle(BugsCard, "Jump [N]", SuperJumpEnabled, function(Value)
+   SuperJumpEnabled = Value
+   ConfigData.SuperJumpEnabled = Value
+   SaveConfig()
+end)
+
+local function ResetHead(head)
+   if head and head:IsA("BasePart") then
+      head.Size = Vector3_new(1.2, 1.2, 1.2)
+      head.Transparency = 0
+      head.Material = Enum.Material.Plastic
+   end
+end
+
+CreateToggle(BugsCard, "Hit Box", HitBoxEnabled, function(Value)
+   HitBoxEnabled = Value
+   ConfigData.HitBoxEnabled = Value
+   SaveConfig()
+   
+   if not Value then
+      for _, player in ipairs(Players:GetPlayers()) do
+         if player ~= LocalPlayer and player.Character then
+            ResetHead(player.Character:FindFirstChild("Head"))
+         end
+      end
+   end
+end)
+
+task.spawn(function()
+   if NoShake then ApplyFastNoShake(true) end
+   if NoMusic then ApplyNoMusic(true) end
+   if LavaWalkState then ApplyLavaWalk(true) end
+   if WaterWalkState then
+      _G.WalkWater_Part = true
+      pcall(function()
+         local waterPart = workspace:WaitForChild("Map", 5) and workspace.Map:WaitForChild("WaterBase-Plane", 5)
+         if waterPart then waterPart.Size = Vector3_new(1000, 112, 1000) end
+      end)
+   end
+end)
+
+task.spawn(function()
+   local effectContainer = ReplicatedStorage:WaitForChild("Effect", 5) and ReplicatedStorage.Effect:WaitForChild("Container", 5)
+   if effectContainer then
+      local function processChild(child)
+         if RemoveDraco and child.Name == "DracoRace" then
+            local base = child:FindFirstChild("BaseField")
+            if base then base:Destroy() end
+            local burn = child:FindFirstChild("ScreenBurn")
+            if burn then burn:Destroy() end
+         elseif RemoveControl and child.Name == "ControlRework" then
+            local domain = child:FindFirstChild("Domain")
+            if domain then domain:Destroy() end
+         end
+      end
+
+      for _, child in ipairs(effectContainer:GetChildren()) do
+         processChild(child)
+      end
+
+      effectContainer.ChildAdded:Connect(processChild)
+   end
+end)
+
+task.spawn(function()
+   while task.wait(1) do
+      if FastMode then
+         pcall(function()
+            local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+            if playerGui then
+               local mainMinimal = playerGui:FindFirstChild("Main (minimal)")
+               if mainMinimal and mainMinimal:FindFirstChild("ChooseTeam") then
+                  local btn = mainMinimal.ChooseTeam:FindFirstChild("FastModeButton")
+                  if btn and btn.Visible then
+                     for _, connection in ipairs(getnet(btn.MouseButton1Click)) do connection:Fire() end
+                     for _, connection in ipairs(getnet(btn.Activated)) do connection:Fire() end
+                  end
+               end
+            end
+         end)
+      end
+   end
+end)
+
+task.spawn(function()
+   local commF = ReplicatedStorage:WaitForChild("Remotes", 5) and ReplicatedStorage.Remotes:WaitForChild("CommF_", 5)
+   while task.wait(1) do
+      if AutoHaki and commF then
+         local char = LocalPlayer.Character
+         if char and not char:FindFirstChild("HasBuso") then
+            commF:InvokeServer("Buso")
+         end
+      end
+   end
+end)
+
+task.spawn(function()
+   while task.wait(0.3) do
+      if HitBoxEnabled then
+         local localChar = LocalPlayer.Character
+         local localHead = localChar and localChar:FindFirstChild("Head")
+
+         for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer and player.Character then
+               local head = player.Character:FindFirstChild("Head")
+               if head then
+                  if head.Size.X ~= 13 then
+                     head.Size = Vector3_new(13, 13, 13)
+                     head.CanCollide = false
+                     head.Transparency = 1
+
+                     if localHead then
+                        for _, child in ipairs(head:GetChildren()) do
+                           if child:IsA("SpecialMesh") or child:IsA("MeshPart") or (child:IsA("Accessory") and string_find(string_lower(child.Name), "head")) or child:IsA("Model") then
+                              child:Destroy()
+                           end
+                        end
+                        for _, child in ipairs(localHead:GetChildren()) do
+                           if child:IsA("SpecialMesh") or child:IsA("DataModelMesh") then
+                              local clone = child:Clone()
+                              clone.Parent = head
+                           end
+                        end
+                     end
+                  end
+               end
+            end
+         end
+      end
+   end
+end)
+
+task.spawn(function()
+   repeat task.wait(0.5) until workspace:FindFirstChild("Map") and workspace.Map:FindFirstChild("WaterBase-Plane")
+   if NoMusic then ApplyNoMusic(true) end
+   if WaterWalkState then
+      _G.WalkWater_Part = true
+      pcall(function()
+         local waterPart = workspace.Map:FindFirstChild("WaterBase-Plane")
+         if waterPart then waterPart.Size = Vector3_new(1000, 112, 1000) end
+      end)
+   end
+end)
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+   if gameProcessed then return end
+
+   if input.UserInputType == Enum.UserInputType.Keyboard then
+      if SuperJumpEnabled and input.KeyCode == SuperJumpKey then
+         local char = LocalPlayer.Character
+         local hrp = char and char:FindFirstChild("HumanoidRootPart")
+         if hrp then
+            hrp.AssemblyLinearVelocity = Vector3_new(hrp.AssemblyLinearVelocity.X, 350, hrp.AssemblyLinearVelocity.Z)
+         end
+      end
+
+      if ZBugEnabled and input.KeyCode == ZBugKey then
+         local tool = GetSpecialTool("sanguine") or GetSpecialTool("god")
+         if tool then
+            local char = LocalPlayer.Character
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+            if humanoid and hrp then
+               if humanoid.FloorMaterial ~= Enum.Material.Air then return end
+
+               humanoid:EquipTool(tool)
+
+               task.spawn(function()
+                  task.wait(0.2)
+                  ElevateThread()
+                  CastSkill("Z", 0)
+               end)
+
+               task.spawn(function()
+                  local bv = Instance_new("BodyVelocity")
+                  bv.MaxForce = Vector3_new(1e8, 0, 1e8)
+                  bv.Velocity = hrp.CFrame.LookVector * 500
+                  bv.Parent = hrp
+
+                  local duration = string_find(string_lower(tool.Name), "sanguine") and 4.5 or 4
+                  local startTime = tick()
+                  local conn
+                  conn = RunService.RenderStepped:Connect(function()
+                     if tick() - startTime < duration and hrp and hrp.Parent and humanoid.FloorMaterial == Enum.Material.Air then
+                        humanoid.WalkSpeed = 500
+                        bv.Velocity = hrp.CFrame.LookVector * 500
+                     else
+                        conn:Disconnect()
+                        bv:Destroy()
+                        humanoid.WalkSpeed = 16
+                     end
+                  end)
+               end)
+            end
+         end
+      end
+   end
+end)
