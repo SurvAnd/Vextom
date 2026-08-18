@@ -2,4 +2,4 @@ Vextom Helper Это скрипт на Blox Fruits созданный для п�
 В нем нет никаких функций за которые могут забанить.
 Также там нет функций которые способны помешать игрокам.
 
-Основной лоадстринг loadstring(game:HttpGet("hhttps://pastebin.com/raw/UFBi31yJ"))()
+Основной лоадстринг loadstring(game:HttpGet("https://pastebin.com/raw/UFBi31yJ"))()
