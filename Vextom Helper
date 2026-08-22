@@ -10,8 +10,8 @@ local UDim2_new = UDim2.new
 local UDim2_fromOffset = UDim2.fromOffset
 local Color3_fromRGB = Color3.fromRGB
 local Instance_new = Instance.new
-local tick = tick
-local getnet = getconnections or function() return {} end
+local os_clock = os.clock
+local math_clamp = math.clamp
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -40,7 +40,6 @@ local ConfigData = {
    SelectedSkill = "Z",
    SkillHoldTime = 0,
    SkillUseDelay = 50,
-   HitBoxEnabled = false,
    SuperJumpEnabled = false,
    ZBugEnabled = false
 }
@@ -90,7 +89,6 @@ local SelectedWeapon = ConfigData.SelectedWeapon
 local SelectedSkill = ConfigData.SelectedSkill
 local SkillHoldTime = ConfigData.SkillHoldTime
 local SkillUseDelay = ConfigData.SkillUseDelay
-local HitBoxEnabled = ConfigData.HitBoxEnabled
 local SuperJumpEnabled = ConfigData.SuperJumpEnabled
 local SuperJumpKey = Enum.KeyCode.N
 local ZBugEnabled = ConfigData.ZBugEnabled
@@ -105,28 +103,40 @@ local function ApplyLavaWalk(enable)
             lavaPart = Instance_new("Part")
             lavaPart.Name = "LavaWalkPart"
             lavaPart.Size = Vector3_new(200, 30, 400)
-            lavaPart.Position = Vector3_new(-5215, 154, -5600)
+            lavaPart.Position = Vector3_new(-5215, 157, -5600)
             lavaPart.Anchored = true
-            lavaPart.Color = Color3_fromRGB(255, 140, 0)
+            lavaPart.Transparency = 1
+            lavaPart.CanCollide = true
             lavaPart.Parent = workspace
          end
-      else
-         if lavaPart then
-            lavaPart:Destroy()
-            lavaPart = nil
-         end
+      elseif lavaPart then
+         lavaPart:Destroy()
+         lavaPart = nil
       end
    end)
 end
 
+local setidentityFunc
+if setthreadidentity then
+   setidentityFunc = setthreadidentity
+elseif setidentity then
+   setidentityFunc = setidentity
+elseif syn and syn.set_thread_identity then
+   setidentityFunc = syn.set_thread_identity
+end
+
 local function ElevateThread()
-   if setthreadidentity then
-      pcall(setthreadidentity, 7)
-   elseif setidentity then
-      pcall(setidentity, 7)
-   elseif syn and syn.set_thread_identity then
-      pcall(syn.set_thread_identity, 7)
+   if setidentityFunc then
+      pcall(setidentityFunc, 7)
    end
+end
+
+local function CheckToolTip(tool, weaponType)
+   local tooltip = tool.ToolTip
+   return (weaponType == "Melee" and tooltip == "Melee") or
+          (weaponType == "Blox Fruits" and (tooltip == "Blox Fruit" or string_find(tool.Name, "Fruit"))) or
+          (weaponType == "Sword" and tooltip == "Sword") or
+          (weaponType == "Gun" and tooltip == "Gun")
 end
 
 local function EquipWeapon(weaponType)
@@ -136,28 +146,16 @@ local function EquipWeapon(weaponType)
    if not humanoid then return nil, false end
 
    local equipped = char:FindFirstChildOfClass("Tool")
-   if equipped then
-      local tooltip = equipped.ToolTip
-      if (weaponType == "Melee" and tooltip == "Melee") or
-         (weaponType == "Blox Fruits" and (tooltip == "Blox Fruit" or string_find(equipped.Name, "Fruit"))) or
-         (weaponType == "Sword" and tooltip == "Sword") or
-         (weaponType == "Gun" and tooltip == "Gun") then
-         return equipped, false
-      end
+   if equipped and CheckToolTip(equipped, weaponType) then
+      return equipped, false
    end
 
    local backpack = LocalPlayer:FindFirstChild("Backpack")
    if backpack then
       for _, tool in ipairs(backpack:GetChildren()) do
-         if tool:IsA("Tool") then
-            local tooltip = tool.ToolTip
-            if (weaponType == "Melee" and tooltip == "Melee") or
-               (weaponType == "Blox Fruits" and (tooltip == "Blox Fruit" or string_find(tool.Name, "Fruit"))) or
-               (weaponType == "Sword" and tooltip == "Sword") or
-               (weaponType == "Gun" and tooltip == "Gun") then
-               humanoid:EquipTool(tool)
-               return tool, true
-            end
+         if tool:IsA("Tool") and CheckToolTip(tool, weaponType) then
+            humanoid:EquipTool(tool)
+            return tool, true
          end
       end
    end
@@ -314,8 +312,8 @@ end
 
 local MainFrame = Instance_new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2_fromOffset(680, 460)
-MainFrame.Position = UDim2_new(0.5, -340, 0.5, -230)
+MainFrame.Size = UDim2_fromOffset(680, 410)
+MainFrame.Position = UDim2_new(0.5, -340, 0.5, -205)
 MainFrame.BackgroundColor3 = Color3_fromRGB(18, 18, 18)
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = false
@@ -347,9 +345,9 @@ local GlobeBtn = Instance_new("ImageButton")
 GlobeBtn.Name = "GlobeBtn"
 GlobeBtn.Size = UDim2_fromOffset(26, 26)
 GlobeBtn.Position = UDim2_new(1, -64, 0, 6)
-GlobeBtn.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
+GlobeBtn.BackgroundColor3 = Color3_fromRGB(30, 30, 30)
 GlobeBtn.Image = "rbxassetid://6031075931"
-GlobeBtn.ImageColor3 = Color3_fromRGB(255, 255, 255)
+GlobeBtn.ImageColor3 = Color3_fromRGB(200, 200, 200)
 GlobeBtn.AutoButtonColor = false
 GlobeBtn.Parent = TopBar
 
@@ -361,7 +359,7 @@ local CloseBtn = Instance_new("ImageButton")
 CloseBtn.Name = "CloseBtn"
 CloseBtn.Size = UDim2_fromOffset(26, 26)
 CloseBtn.Position = UDim2_new(1, -32, 0, 6)
-CloseBtn.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
+CloseBtn.BackgroundColor3 = Color3_fromRGB(30, 30, 30)
 CloseBtn.Image = "rbxassetid://6031094678"
 CloseBtn.ImageColor3 = Color3_fromRGB(200, 200, 200)
 CloseBtn.AutoButtonColor = false
@@ -480,8 +478,8 @@ SoruPadding.Parent = SoruCard
 
 local BugsCard = Instance_new("Frame")
 BugsCard.Name = "BugsCard"
-BugsCard.Size = UDim2_new(1, 0, 0, 164)
-BugsCard.Position = UDim2_new(0, 0, 0, 250)
+BugsCard.Size = UDim2_new(1, 0, 0, 118)
+BugsCard.Position = UDim2_new(0, 0, 0, 244)
 BugsCard.BackgroundColor3 = Color3_fromRGB(24, 24, 24)
 BugsCard.BorderSizePixel = 0
 BugsCard.Parent = RightContainer
@@ -521,7 +519,7 @@ local function CreateToggle(parent, labelText, defaultState, callback)
    local ToggleBtn = Instance_new("TextButton")
    ToggleBtn.Size = UDim2_fromOffset(42, 22)
    ToggleBtn.Position = UDim2_new(1, -42, 0.5, -11)
-   ToggleBtn.BackgroundColor3 = defaultState and Color3_fromRGB(70, 70, 70) or Color3_fromRGB(38, 38, 38)
+   ToggleBtn.BackgroundColor3 = defaultState and Color3_fromRGB(60, 60, 60) or Color3_fromRGB(35, 35, 35)
    ToggleBtn.Text = ""
    ToggleBtn.AutoButtonColor = false
    ToggleBtn.Parent = Frame
@@ -533,7 +531,7 @@ local function CreateToggle(parent, labelText, defaultState, callback)
    local Circle = Instance_new("Frame")
    Circle.Size = UDim2_fromOffset(18, 18)
    Circle.Position = defaultState and UDim2_new(1, -20, 0.5, -9) or UDim2_new(0, 2, 0.5, -9)
-   Circle.BackgroundColor3 = Color3_fromRGB(255, 255, 255)
+   Circle.BackgroundColor3 = defaultState and Color3_fromRGB(255, 255, 255) or Color3_fromRGB(120, 120, 120)
    Circle.BorderSizePixel = 0
    Circle.Parent = ToggleBtn
 
@@ -546,10 +544,11 @@ local function CreateToggle(parent, labelText, defaultState, callback)
    ToggleBtn.MouseButton1Click:Connect(function()
       state = not state
       TweenService:Create(ToggleBtn, TweenInfo.new(0.15), {
-         BackgroundColor3 = state and Color3_fromRGB(70, 70, 70) or Color3_fromRGB(38, 38, 38)
+         BackgroundColor3 = state and Color3_fromRGB(60, 60, 60) or Color3_fromRGB(35, 35, 35)
       }):Play()
       TweenService:Create(Circle, TweenInfo.new(0.15), {
-         Position = state and UDim2_new(1, -20, 0.5, -9) or UDim2_new(0, 2, 0.5, -9)
+         Position = state and UDim2_new(1, -20, 0.5, -9) or UDim2_new(0, 2, 0.5, -9),
+         BackgroundColor3 = state and Color3_fromRGB(255, 255, 255) or Color3_fromRGB(120, 120, 120)
       }):Play()
       callback(state)
    end)
@@ -576,7 +575,7 @@ local function CreateInput(parent, labelText, defaultValue, callback)
    local Box = Instance_new("TextBox")
    Box.Size = UDim2_fromOffset(42, 24)
    Box.Position = UDim2_new(1, -42, 0.5, -12)
-   Box.BackgroundColor3 = Color3_fromRGB(32, 32, 32)
+   Box.BackgroundColor3 = Color3_fromRGB(30, 30, 30)
    Box.Text = tostring(defaultValue)
    Box.TextColor3 = Color3_fromRGB(200, 200, 200)
    Box.TextSize = 14
@@ -604,7 +603,7 @@ local function CreateDropdown(parent, placeholder, options, defaultOption, callb
 
    local Button = Instance_new("TextButton")
    Button.Size = UDim2_new(1, 0, 0, 36)
-   Button.BackgroundColor3 = Color3_fromRGB(32, 32, 32)
+   Button.BackgroundColor3 = Color3_fromRGB(30, 30, 30)
    Button.Text = ""
    Button.AutoButtonColor = false
    Button.Parent = Container
@@ -632,54 +631,20 @@ local function CreateDropdown(parent, placeholder, options, defaultOption, callb
    Icon.ImageColor3 = Color3_fromRGB(150, 150, 150)
    Icon.Parent = Button
 
-   local ListFrame = Instance_new("Frame")
-   ListFrame.Size = UDim2_new(1, 0, 0, #options * 26 + 4)
-   ListFrame.Position = UDim2_new(0, 0, 1, 4)
-   ListFrame.BackgroundColor3 = Color3_fromRGB(28, 28, 28)
-   ListFrame.BorderSizePixel = 0
-   ListFrame.Visible = false
-   ListFrame.ZIndex = 10
-   ListFrame.Parent = Container
-
-   local ListCorner = Instance_new("UICorner")
-   ListCorner.CornerRadius = UDim.new(0, 6)
-   ListCorner.Parent = ListFrame
-
-   local ListLayout = Instance_new("UIListLayout")
-   ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-   ListLayout.Padding = UDim.new(0, 2)
-   ListLayout.Parent = ListFrame
-
-   local ListPadding = Instance_new("UIPadding")
-   ListPadding.PaddingTop = UDim.new(0, 2)
-   ListPadding.PaddingBottom = UDim.new(0, 2)
-   ListPadding.Parent = ListFrame
-
-   local open = false
+   local currentIndex = 1
+   for i, opt in ipairs(options) do
+      if opt == defaultOption then
+         currentIndex = i
+         break
+      end
+   end
 
    Button.MouseButton1Click:Connect(function()
-      open = not open
-      ListFrame.Visible = open
+      currentIndex = (currentIndex % #options) + 1
+      local nextOpt = options[currentIndex]
+      Label.Text = placeholder .. " • " .. nextOpt
+      callback(nextOpt)
    end)
-
-   for _, opt in ipairs(options) do
-      local OptBtn = Instance_new("TextButton")
-      OptBtn.Size = UDim2_new(1, 0, 0, 24)
-      OptBtn.BackgroundTransparency = 1
-      OptBtn.Text = opt
-      OptBtn.TextColor3 = Color3_fromRGB(200, 200, 200)
-      OptBtn.TextSize = 14
-      OptBtn.Font = Enum.Font.SourceSans
-      OptBtn.ZIndex = 11
-      OptBtn.Parent = ListFrame
-
-      OptBtn.MouseButton1Click:Connect(function()
-         Label.Text = placeholder .. " • " .. opt
-         open = false
-         ListFrame.Visible = false
-         callback(opt)
-      end)
-   end
 
    return Container
 end
@@ -750,14 +715,14 @@ end)
 
 CreateInput(SoruCard, "Time Hold", SkillHoldTime, function(Text)
    local num = tonumber(Text)
-   SkillHoldTime = num and math.clamp(num, 0, 5) or 0
+   SkillHoldTime = num and math_clamp(num, 0, 5) or 0
    ConfigData.SkillHoldTime = SkillHoldTime
    SaveConfig()
 end)
 
 CreateInput(SoruCard, "Time Use", SkillUseDelay, function(Text)
    local num = tonumber(Text)
-   SkillUseDelay = num and math.clamp(num, 0, 100) or 50
+   SkillUseDelay = num and math_clamp(num, 0, 100) or 50
    ConfigData.SkillUseDelay = SkillUseDelay
    SaveConfig()
 end)
@@ -784,28 +749,6 @@ CreateToggle(BugsCard, "Jump [N]", SuperJumpEnabled, function(Value)
    SuperJumpEnabled = Value
    ConfigData.SuperJumpEnabled = Value
    SaveConfig()
-end)
-
-local function ResetHead(head)
-   if head and head:IsA("BasePart") then
-      head.Size = Vector3_new(1.2, 1.2, 1.2)
-      head.Transparency = 0
-      head.Material = Enum.Material.Plastic
-   end
-end
-
-CreateToggle(BugsCard, "Hit Box", HitBoxEnabled, function(Value)
-   HitBoxEnabled = Value
-   ConfigData.HitBoxEnabled = Value
-   SaveConfig()
-   
-   if not Value then
-      for _, player in ipairs(Players:GetPlayers()) do
-         if player ~= LocalPlayer and player.Character then
-            ResetHead(player.Character:FindFirstChild("Head"))
-         end
-      end
-   end
 end)
 
 task.spawn(function()
@@ -850,12 +793,15 @@ task.spawn(function()
          pcall(function()
             local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
             if playerGui then
-               local mainMinimal = playerGui:FindFirstChild("Main (minimal)")
+               local mainMinimal = playerGui:FindFirstChild("Main (minimal)") or playerGui:FindFirstChild("Main")
                if mainMinimal and mainMinimal:FindFirstChild("ChooseTeam") then
-                  local btn = mainMinimal.ChooseTeam:FindFirstChild("FastModeButton")
-                  if btn and btn.Visible then
-                     for _, connection in ipairs(getnet(btn.MouseButton1Click)) do connection:Fire() end
-                     for _, connection in ipairs(getnet(btn.Activated)) do connection:Fire() end
+                  local btn = mainMinimal.ChooseTeam:FindFirstChild("FastModeButton") or mainMinimal.ChooseTeam:FindFirstChild("FastMode")
+                  if btn then
+                     local getnet_func = getnet or getconnections
+                     if getnet_func then
+                        for _, connection in ipairs(getnet_func(btn.MouseButton1Click)) do connection:Fire() end
+                        for _, connection in ipairs(getnet_func(btn.Activated)) do connection:Fire() end
+                     end
                   end
                end
             end
@@ -871,42 +817,6 @@ task.spawn(function()
          local char = LocalPlayer.Character
          if char and not char:FindFirstChild("HasBuso") then
             commF:InvokeServer("Buso")
-         end
-      end
-   end
-end)
-
-task.spawn(function()
-   while task.wait(0.3) do
-      if HitBoxEnabled then
-         local localChar = LocalPlayer.Character
-         local localHead = localChar and localChar:FindFirstChild("Head")
-
-         for _, player in ipairs(Players:GetPlayers()) do
-            if player ~= LocalPlayer and player.Character then
-               local head = player.Character:FindFirstChild("Head")
-               if head then
-                  if head.Size.X ~= 13 then
-                     head.Size = Vector3_new(13, 13, 13)
-                     head.CanCollide = false
-                     head.Transparency = 1
-
-                     if localHead then
-                        for _, child in ipairs(head:GetChildren()) do
-                           if child:IsA("SpecialMesh") or child:IsA("MeshPart") or (child:IsA("Accessory") and string_find(string_lower(child.Name), "head")) or child:IsA("Model") then
-                              child:Destroy()
-                           end
-                        end
-                        for _, child in ipairs(localHead:GetChildren()) do
-                           if child:IsA("SpecialMesh") or child:IsA("DataModelMesh") then
-                              local clone = child:Clone()
-                              clone.Parent = head
-                           end
-                        end
-                     end
-                  end
-               end
-            end
          end
       end
    end
@@ -961,10 +871,10 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                   bv.Parent = hrp
 
                   local duration = string_find(string_lower(tool.Name), "sanguine") and 4.5 or 4
-                  local startTime = tick()
+                  local startTime = os_clock()
                   local conn
                   conn = RunService.RenderStepped:Connect(function()
-                     if tick() - startTime < duration and hrp and hrp.Parent and humanoid.FloorMaterial == Enum.Material.Air then
+                     if os_clock() - startTime < duration and hrp and hrp.Parent and humanoid.FloorMaterial == Enum.Material.Air then
                         humanoid.WalkSpeed = 500
                         bv.Velocity = hrp.CFrame.LookVector * 500
                      else
