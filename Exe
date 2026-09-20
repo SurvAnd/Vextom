@@ -1,0 +1,397 @@
+task.wait(1)
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local ConfigFolder = "Vextom"
+local ConfigFile = ConfigFolder .. "/Config.txt"
+
+local Config = {
+   DarkComboEnabled = false,
+   DarkComboKey = Enum.KeyCode.G,
+   SuperJumpEnabled = false,
+   SuperJumpKey = Enum.KeyCode.G,
+   YamaBugEnabled = false,
+   YamaBugKey = Enum.KeyCode.G,
+   GuitarBugEnabled = false,
+   GodhumanBugEnabled = false,
+   GodhumanBugKey = Enum.KeyCode.G,
+   SanguineBugEnabled = false,
+   SanguineBugKey = Enum.KeyCode.G,
+   PortalSkin = "Default",
+   CustomCafeEnabled = false
+}
+
+local ColorMap = {
+   BLACK = Color3.fromRGB(0, 0, 0),
+   PURPLE = Color3.fromRGB(180, 0, 255),
+   RED = Color3.fromRGB(255, 0, 0),
+   GREEN = Color3.fromRGB(0, 255, 0),
+   YELLOW = Color3.fromRGB(255, 140, 0),
+   AQUA = Color3.fromRGB(0, 255, 255)
+}
+
+local DarkComboSequence = {
+   {Weapon = "Gun", Skill = "F", HoldTime = 0, DelayMs = 120},
+   {Weapon = "Gun", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Gun", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Gun", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Gun", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Gun", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Gun", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Sword", Skill = "Z", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "X", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "C", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "C", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "C", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "C", HoldTime = 0, DelayMs = 0},
+   {Weapon = "Melee", Skill = "C", HoldTime = 0, DelayMs = 0}
+}
+
+local guitarCooldown, yamaCooldown, sanguineCooldown, godhumanCooldown = false, false, false, false
+local customSkyTexture = "rbxassetid://91562807408462"
+local blackColor, whiteColor = Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255)
+
+local function applySkinToObject(obj, targetColor)
+   if obj.Name == "StagePart" and obj.Parent and obj.Parent.Name == "VArenaDimension" then return end
+   if obj:IsA("Sky") then
+      obj.SkyboxBk, obj.SkyboxDn, obj.SkyboxFt, obj.SkyboxLf, obj.SkyboxRt, obj.SkyboxUp = customSkyTexture, customSkyTexture, customSkyTexture, customSkyTexture, customSkyTexture, customSkyTexture
+   elseif obj:IsA("Atmosphere") then
+      obj.Decay = (targetColor == blackColor) and whiteColor or targetColor
+   elseif obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail") then
+      obj.Color = ColorSequence.new(targetColor)
+   elseif obj:IsA("Light") then
+      obj.Color = targetColor
+   elseif obj:IsA("Highlight") then
+      obj.FillColor, obj.OutlineColor = targetColor, targetColor
+   elseif obj:IsA("BasePart") then
+      obj.Color = targetColor
+   end
+end
+
+local portalConn, wsPortalConn
+local function ApplyPortalSkinLogic()
+   local targetColor = ColorMap[tostring(Config.PortalSkin):upper()]
+   if not targetColor then return end
+
+   task.spawn(function()
+      if portalConn then portalConn:Disconnect() portalConn = nil end
+      if wsPortalConn then wsPortalConn:Disconnect() wsPortalConn = nil end
+
+      local fx = ReplicatedStorage:WaitForChild("FX", 10)
+      local portalFX = fx and (fx:FindFirstChild("PortalEffects") or fx:WaitForChild("PortalEffects", 10))
+
+      if portalFX then
+         for _, v in ipairs(portalFX:GetDescendants()) do applySkinToObject(v, targetColor) end
+         portalConn = portalFX.DescendantAdded:Connect(function(child)
+            local cur = ColorMap[tostring(Config.PortalSkin):upper()]
+            if cur then applySkinToObject(child, cur) end
+         end)
+      end
+
+      for _, obj in ipairs(Workspace:GetDescendants()) do
+         if string.find(string.lower(obj.Name), "portal") then
+            applySkinToObject(obj, targetColor)
+            for _, c in ipairs(obj:GetDescendants()) do applySkinToObject(c, targetColor) end
+         end
+      end
+
+      wsPortalConn = Workspace.DescendantAdded:Connect(function(child)
+         if string.find(string.lower(child.Name), "portal") or (child.Parent and string.find(string.lower(child.Parent.Name), "portal")) then
+            local cur = ColorMap[tostring(Config.PortalSkin):upper()]
+            if cur then applySkinToObject(child, cur) end
+         end
+      end)
+   end)
+end
+
+local isCustomCafeApplied = false
+local cafeTargets = {
+   {"NPCs", "Barista"}, {"NPCs", "Nerd"}, {"NPCs", "Bartilo"}, {"NPCs", "Dragon Talon Sage"},
+   {"NPCs", "Customer"}, {"NPCs", "Manager"}, {"NPCs", "Set Home Point"}, {"NPCs", "Bounty/Honor Expert"},
+   {"FanArt"}, {"Leaderboards"}, {"ChestModels"}, {"Map", "Dressrosa", "Tavern"},
+   {"Map", "Dressrosa", "JuiceBar"}, {"_WorldOrigin", "Posters"}
+}
+local cafeBulkTargets = {"BigHouse", "Hotel", "SmallHouse", "TradeTable"}
+local cafeNpcList = {
+   { name = "Blox Fruit Gacha", pos = Vector3.new(-320, 74, 382) },
+   { name = "Blox Fruit Dealer", pos = Vector3.new(-336, 73, 382) },
+   { name = "tort", pos = Vector3.new(-352, 71, 382) },
+   { name = "Awakenings Expert", pos = Vector3.new(-368, 71, 382) }
+}
+
+local function removeCafeObject(path)
+   local current = Workspace
+   for _, name in ipairs(path) do
+      current = current:FindFirstChild(name)
+      if not current then return end
+   end
+   current:Destroy()
+end
+
+local function moveCafeNPC(npc, targetPos)
+   if npc:IsA("Model") then npc:PivotTo(CFrame.new(targetPos))
+   elseif npc:IsA("BasePart") then npc.Position = targetPos end
+   local upper = npc:FindFirstChild("UpperTorso")
+   if upper and upper:IsA("BasePart") then upper.Position = targetPos end
+   local root = npc:FindFirstChild("HumanoidRootPart")
+   if root and root:IsA("BasePart") then root.Position = targetPos end
+end
+
+local function ApplyCustomCafeLogic()
+   if isCustomCafeApplied then return end
+   isCustomCafeApplied = true
+
+   local minPos, maxPos = Vector3.new(-466, 69, 200), Vector3.new(-310, 69, 393)
+   local part = Workspace:FindFirstChild("MainCafePart") or Instance.new("Part")
+   part.Name, part.Size, part.Position = "MainCafePart", Vector3.new(math.abs(maxPos.X - minPos.X), 1, math.abs(maxPos.Z - minPos.Z)), (minPos + maxPos) / 2
+   part.Color, part.Material, part.Anchored, part.Parent = Color3.fromRGB(100, 100, 100), Enum.Material.SmoothPlastic, true, Workspace
+
+   for _, path in ipairs(cafeTargets) do removeCafeObject(path) end
+   local dressrosa = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Dressrosa")
+   if dressrosa then
+      for _, child in ipairs(dressrosa:GetChildren()) do
+         for _, tName in ipairs(cafeBulkTargets) do
+            if child.Name == tName then child:Destroy() break end
+         end
+      end
+      local model = dressrosa:FindFirstChild("Model")
+      if model then
+         for _, child in ipairs(model:GetChildren()) do
+            if child.Name == "Tree" then child:Destroy() end
+         end
+      end
+   end
+
+   Workspace.DescendantAdded:Connect(function(descendant)
+      if not Config.CustomCafeEnabled then return end
+      for _, path in ipairs(cafeTargets) do
+         if descendant.Name == path[#path] then task.defer(function() removeCafeObject(path) end) end
+      end
+      for _, tName in ipairs(cafeBulkTargets) do
+         if descendant.Name == tName and dressrosa and descendant:IsDescendantOf(dressrosa) then descendant:Destroy() end
+      end
+      if descendant.Name == "Tree" and descendant:IsDescendantOf(Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("Dressrosa") and Workspace.Map.Dressrosa:FindFirstChild("Model")) then
+         descendant:Destroy()
+      end
+   end)
+
+   task.spawn(function()
+      while task.wait(0.5) do
+         if not Config.CustomCafeEnabled then break end
+         local npcs = Workspace:FindFirstChild("NPCs")
+         if npcs then
+            for _, nData in ipairs(cafeNpcList) do
+               local npc = npcs:FindFirstChild(nData.name)
+               if npc then
+                  local currentPos = npc:IsA("Model") and npc:GetPivot().Position or (npc:IsA("BasePart") and npc.Position)
+                  if currentPos and (currentPos - nData.pos).Magnitude > 5 then
+                     moveCafeNPC(npc, nData.pos)
+                  end
+               end
+            end
+         end
+      end
+   end)
+end
+
+local defaultConfig = "Dark Combo = False, G\nSuper Jump = False, G\nYama Bug = False, G\nGuitar Bug = False\nGodhuman Bug = False, G\nSanguine Bug = False, G\nPortal Skin = Default\nCustom Cafe = False"
+local lastPortalSkin = nil
+
+local function ReadTxtConfigs()
+   pcall(function()
+      if not isfolder(ConfigFolder) and makefolder then makefolder(ConfigFolder) end
+      if not isfile(ConfigFile) and writefile then writefile(ConfigFile, defaultConfig) end
+      if isfile(ConfigFile) and readfile then
+         for line in readfile(ConfigFile):gmatch("[^\r\n]+") do
+            local name, content = line:match("^([^=]+)=%s*(.-)%s*$")
+            if name and content then
+               name = name:match("^%s*(.-)%s*$")
+               local enStr, keyStr = content:match("^([^,]+),%s*([^,]+)")
+               local isEn = enStr and (enStr:match("^%s*(.-)%s*$"):lower() == "true") or (content:match("^%s*(.-)%s*$"):lower() == "true")
+               local key = keyStr and Enum.KeyCode[keyStr:match("^%s*(.-)%s*$"):upper()]
+
+               if name == "Dark Combo" then Config.DarkComboEnabled = isEn if key then Config.DarkComboKey = key end
+               elseif name == "Super Jump" then Config.SuperJumpEnabled = isEn if key then Config.SuperJumpKey = key end
+               elseif name == "Yama Bug" then Config.YamaBugEnabled = isEn if key then Config.YamaBugKey = key end
+               elseif name == "Guitar Bug" then Config.GuitarBugEnabled = isEn
+               elseif name == "Godhuman Bug" then Config.GodhumanBugEnabled = isEn if key then Config.GodhumanBugKey = key end
+               elseif name == "Sanguine Bug" then Config.SanguineBugEnabled = isEn if key then Config.SanguineBugKey = key end
+               elseif name == "Portal Skin" then
+                  Config.PortalSkin = content:match("^%s*(.-)%s*$")
+                  if Config.PortalSkin ~= lastPortalSkin then lastPortalSkin = Config.PortalSkin ApplyPortalSkinLogic() end
+               elseif name == "Custom Cafe" then
+                  Config.CustomCafeEnabled = isEn
+                  if isEn then ApplyCustomCafeLogic() end
+               end
+            end
+         end
+      end
+   end)
+end
+
+ReadTxtConfigs()
+task.spawn(function()
+   while task.wait(3) do ReadTxtConfigs() end
+end)
+
+local function CheckToolTip(tool, wType)
+   if not tool or not tool:IsA("Tool") then return false end
+   local tt = tool.ToolTip
+   return (wType == "Melee" and tt == "Melee") or (wType == "Blox Fruit" and (tt == "Blox Fruit" or string.find(tool.Name, "Fruit"))) or (wType == "Sword" and tt == "Sword") or (wType == "Gun" and tt == "Gun")
+end
+
+local function GetEquippedToolByName(kw)
+   local char = LocalPlayer.Character
+   if not char then return nil end
+   local eq = char:FindFirstChildOfClass("Tool")
+   if eq and string.find(string.lower(eq.Name), string.lower(kw)) then
+      return eq
+   end
+   return nil
+end
+
+local function FindTool(kw, wType)
+   local char = LocalPlayer.Character
+   if not char then return nil end
+   kw = string.lower(kw)
+   local eq = char:FindFirstChildOfClass("Tool")
+   if eq and string.find(string.lower(eq.Name), kw) and (not wType or CheckToolTip(eq, wType)) then return eq end
+   local bp = LocalPlayer:FindFirstChild("Backpack")
+   if bp then
+      for _, t in ipairs(bp:GetChildren()) do
+         if t:IsA("Tool") and string.find(string.lower(t.Name), kw) and (not wType or CheckToolTip(t, wType)) then return t end
+      end
+   end
+   return nil
+end
+
+local function EquipWeapon(wType)
+   local char = LocalPlayer.Character
+   local hum = char and char:FindFirstChildOfClass("Humanoid")
+   if not hum then return end
+   local tool = FindTool("", wType)
+   if tool then hum:EquipTool(tool) end
+end
+
+local function CastSkill(keyStr, hold)
+   local k = Enum.KeyCode[tostring(keyStr):upper()]
+   if k then
+      VirtualInputManager:SendKeyEvent(true, k, false, game)
+      task.wait(hold and hold > 0 and hold or 0.01)
+      VirtualInputManager:SendKeyEvent(false, k, false, game)
+   end
+end
+
+local activeCombos = {}
+local function RunSequence(cName, seq)
+   if activeCombos[cName] then return end
+   if cName == "DarkCombo" and not (FindTool("god") and FindTool("dark") and (FindTool("dark blade") or FindTool("yoru")) and (FindTool("venom bow") or FindTool("serpent bow"))) then return end
+   activeCombos[cName] = true
+   task.spawn(function()
+      for _, step in ipairs(seq) do
+         if step.Weapon and step.Weapon ~= "None" then EquipWeapon(step.Weapon) task.wait(0.05) end
+         if step.Skill then CastSkill(step.Skill, step.HoldTime or 0) end
+         if step.DelayMs and step.DelayMs > 0 then task.wait(step.DelayMs / 1000) end
+      end
+      activeCombos[cName] = nil
+   end)
+end
+
+local function GetMouseDirection()
+   local char = LocalPlayer.Character
+   local hrp = char and char:FindFirstChild("HumanoidRootPart")
+   if not hrp then return Vector3.new(0, 0, 1) end
+   local mouse = LocalPlayer:GetMouse()
+   if mouse and mouse.Hit then
+      local dir = (mouse.Hit.Position - hrp.Position)
+      if dir.Magnitude > 0.001 then return dir.Unit end
+   end
+   return hrp.CFrame.LookVector
+end
+
+local function ApplyDashInDir(dir, fwd, dur)
+   local char = LocalPlayer.Character
+   local hrp = char and char:FindFirstChild("HumanoidRootPart")
+   if not hrp then return end
+   local vel = dir * (fwd or 350)
+   
+   local att = Instance.new("Attachment")
+   att.Parent = hrp
+   local lv = Instance.new("LinearVelocity")
+   lv.Attachment0 = att
+   lv.MaxForce = 1e6
+   lv.VectorVelocity = vel
+   lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+   lv.Parent = hrp
+
+   task.delay(dur or 0.2, function() 
+      if lv then lv:Destroy() end 
+      if att then att:Destroy() end 
+   end)
+end
+
+local function TriggerBug(tool, keyStr, isSpam, fwd, dur)
+   local char = LocalPlayer.Character
+   local hum = char and char:FindFirstChildOfClass("Humanoid")
+   if hum and tool then
+      hum:EquipTool(tool)
+      local dir = GetMouseDirection()
+      if keyStr then task.spawn(function() task.wait(0.05) CastSkill(keyStr, 0) end) end
+      if isSpam then
+         task.spawn(function()
+            for _ = 1, 5 do ApplyDashInDir(dir, fwd or 350, dur) task.wait(0.2) end
+         end)
+      else
+         ApplyDashInDir(dir, fwd, dur)
+      end
+   end
+end
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+   if gpe then return end
+   if input.UserInputType == Enum.UserInputType.MouseButton1 and Config.GuitarBugEnabled and not guitarCooldown then
+      local t = GetEquippedToolByName("guitar")
+      if t and CheckToolTip(t, "Gun") then
+         guitarCooldown = true
+         ApplyDashInDir(GetMouseDirection(), 350)
+         task.delay(1.8, function() guitarCooldown = false end)
+      end
+   elseif input.UserInputType == Enum.UserInputType.Keyboard then
+      local k = input.KeyCode
+      if Config.YamaBugEnabled and k == Config.YamaBugKey and not yamaCooldown then
+         local t = FindTool("yama", "Sword")
+         if t then yamaCooldown = true TriggerBug(t, "Z", true, 350) task.delay(9, function() yamaCooldown = false end) end
+      elseif Config.GodhumanBugEnabled and k == Config.GodhumanBugKey and not godhumanCooldown then
+         local t = FindTool("god", "Melee")
+         if t then godhumanCooldown = true TriggerBug(t, "Z", true, 400, 0.25) task.delay(8, function() godhumanCooldown = false end) end
+      elseif Config.SanguineBugEnabled and k == Config.SanguineBugKey and not sanguineCooldown then
+         local t = FindTool("sanguine", "Melee")
+         if t then sanguineCooldown = true TriggerBug(t, "Z", true, 350) task.delay(8, function() sanguineCooldown = false end) end
+      elseif Config.DarkComboEnabled and k == Config.DarkComboKey then
+         RunSequence("DarkCombo", DarkComboSequence)
+      elseif Config.SuperJumpEnabled and k == Config.SuperJumpKey then
+         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+         if hrp then
+            local att = Instance.new("Attachment")
+            att.Parent = hrp
+            local lv = Instance.new("LinearVelocity")
+            lv.MaxForce, lv.VectorVelocity, lv.Attachment0, lv.Parent = 1e6, Vector3.new(0, 350, 0), att, hrp
+            task.delay(0.15, function() lv:Destroy() att:Destroy() end)
+         end
+      end
+   end
+end)
