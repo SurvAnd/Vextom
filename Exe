@@ -8,20 +8,16 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 
--- === МАРКИРОВКА РАЗРАБОТЧИКА В ТАБЕ ===
 local DEV_USERNAME = "BloxFruitGacha555"
 
 local function MarkDeveloper(player)
    if player and player.Name == DEV_USERNAME then
       task.spawn(function()
-         -- Делаем несколько попыток на случай, если стандартный PlayerList ещё не загрузился
          for _ = 1, 10 do
             local success = pcall(function()
                StarterGui:SetCore("PlayerExtraInfo", {
                   TargetUser = player,
-                  IsAdmin = true, -- Добавляет официальную иконку молоточка (Developer/Admin)
-                  CustomText = "[Dev]",
-                  CustomTextColor = Color3.fromRGB(255, 215, 0)
+                  IsAdmin = true
                })
             end)
             if success then break end
@@ -31,14 +27,11 @@ local function MarkDeveloper(player)
    end
 end
 
--- Проверяем текущих и подключаем отслеживание новых игроков
 for _, p in ipairs(Players:GetPlayers()) do
    MarkDeveloper(p)
 end
 Players.PlayerAdded:Connect(MarkDeveloper)
 
-
--- === ОСНОВНОЙ СКРИПТ ===
 local ConfigFolder = "Vextom"
 local ConfigFile = ConfigFolder .. "/Config.txt"
 
