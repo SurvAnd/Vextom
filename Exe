@@ -20,7 +20,8 @@ local Config = {
    GodhumanBugKey = Enum.KeyCode.G,
    SanguineBugEnabled = false,
    SanguineBugKey = Enum.KeyCode.G,
-   PortalSkin = "Default"
+   PortalSkin = "Default",
+   CameraZoomFixEnabled = false
 }
 
 local ColorMap = {
@@ -35,6 +36,16 @@ local ColorMap = {
 local guitarCooldown, yamaCooldown, sanguineCooldown, godhumanCooldown = false, false, false, false
 local customSkyTexture = "rbxassetid://91562807408462"
 local blackColor, whiteColor = Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255)
+
+local function ApplyCameraZoomFixLogic()
+   if Config.CameraZoomFixEnabled then
+      LocalPlayer.CameraMaxZoomDistance = 300
+      LocalPlayer.CameraMinZoomDistance = 10
+   else
+      LocalPlayer.CameraMaxZoomDistance = 200
+      LocalPlayer.CameraMinZoomDistance = 0.5
+   end
+end
 
 local function applySkinToObject(obj, targetColor)
    if obj.Name == "StagePart" and obj.Parent and obj.Parent.Name == "VArenaDimension" then return end
@@ -89,7 +100,7 @@ local function ApplyPortalSkinLogic()
    end)
 end
 
-local defaultConfig = "Super Jump = False, G\nYama Bug = False, G\nGuitar Bug = False\nGodhuman Bug = False, G\nSanguine Bug = False, G\nPortal Skin = Default"
+local defaultConfig = "Super Jump = False, G\nYama Bug = False, G\nGuitar Bug = False\nGodhuman Bug = False, G\nSanguine Bug = False, G\nPortal Skin = Default\nCamera Zoom Fix = False"
 local lastPortalSkin = nil
 
 local function ReadTxtConfigs()
@@ -113,6 +124,11 @@ local function ReadTxtConfigs()
                elseif name == "Portal Skin" then
                   Config.PortalSkin = content:match("^%s*(.-)%s*$")
                   if Config.PortalSkin ~= lastPortalSkin then lastPortalSkin = Config.PortalSkin ApplyPortalSkinLogic() end
+               elseif name == "Camera Zoom Fix" then
+                  if Config.CameraZoomFixEnabled ~= isEn then
+                     Config.CameraZoomFixEnabled = isEn
+                     ApplyCameraZoomFixLogic()
+                  end
                end
             end
          end
