@@ -6,6 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
 local ConfigFolder = "Vextom"
 local ConfigFile = ConfigFolder .. "/Config.txt"
@@ -21,7 +22,8 @@ local Config = {
    SanguineBugEnabled = false,
    SanguineBugKey = Enum.KeyCode.G,
    PortalSkin = "Default",
-   CameraZoomFixEnabled = false
+   CameraZoomFixEnabled = false,
+   RemoveSkyEnabled = false
 }
 
 local ColorMap = {
@@ -36,6 +38,15 @@ local ColorMap = {
 local guitarCooldown, yamaCooldown, sanguineCooldown, godhumanCooldown = false, false, false, false
 local customSkyTexture = "rbxassetid://91562807408462"
 local blackColor, whiteColor = Color3.fromRGB(0, 0, 0), Color3.fromRGB(255, 255, 255)
+
+local function ApplyRemoveSkyLogic()
+   if Config.RemoveSkyEnabled then
+      local sky = Lighting:FindFirstChild("FantasySky")
+      if sky then
+         sky:Destroy()
+      end
+   end
+end
 
 local function ApplyCameraZoomFixLogic()
    if Config.CameraZoomFixEnabled then
@@ -100,7 +111,15 @@ local function ApplyPortalSkinLogic()
    end)
 end
 
-local defaultConfig = "Super Jump = False, G\nYama Bug = False, G\nGuitar Bug = False\nGodhuman Bug = False, G\nSanguine Bug = False, G\nPortal Skin = Default\nCamera Zoom Fix = False"
+Lighting.ChildAdded:Connect(function(child)
+   if Config.RemoveSkyEnabled and child.Name == "FantasySky" then
+      task.defer(function()
+         child:Destroy()
+      end)
+   end
+end)
+
+local defaultConfig = "Super Jump = False, G\nYama Bug = False, G\nGuitar Bug = False\nGodhuman Bug = False, G\nSanguine Bug = False, G\nPortal Skin = Default\nCamera Zoom Fix = False\nRemove Sky = False"
 local lastPortalSkin = nil
 
 local function ReadTxtConfigs()
@@ -128,6 +147,11 @@ local function ReadTxtConfigs()
                   if Config.CameraZoomFixEnabled ~= isEn then
                      Config.CameraZoomFixEnabled = isEn
                      ApplyCameraZoomFixLogic()
+                  end
+               elseif name == "Remove Sky" then
+                  if Config.RemoveSkyEnabled ~= isEn then
+                     Config.RemoveSkyEnabled = isEn
+                     ApplyRemoveSkyLogic()
                   end
                end
             end
